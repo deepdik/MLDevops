@@ -75,9 +75,9 @@ pipeline {
                                 echo "✅ Using local kubeconfig file"
                             else
                                 echo "⚠️ No kubeconfig available, skipping Kubernetes operations"
-                                env.SKIP_K8S=true
                             fi
                         '''
+                        env.SKIP_K8S = 'true'
                     }
                 }
             }

@@ -166,17 +166,19 @@ pipeline {
     post {
         success {
             echo '🎉 Pipeline completed successfully!'
-            if (env.SKIP_K8S == 'true') {
-                echo '📊 Model training completed (Kubernetes deployment skipped)'
-                echo '🔧 To enable Kubernetes deployment, configure kubeconfig credential in Jenkins'
-            } else {
-                echo '📊 Model is now deployed and serving predictions'
-                echo '🤖 Kubeflow automation is running'
-                echo '🌐 Access points:'
-                echo '   - Kubeflow UI: http://localhost:8080'
-                echo '   - ML Pipeline UI: http://localhost:8081'
-                echo '   - Model Service: http://localhost:8082'
-                echo '   - Jenkins: http://localhost:8083'
+            script {
+                if (env.SKIP_K8S == 'true') {
+                    echo '📊 Model training completed (Kubernetes deployment skipped)'
+                    echo '🔧 To enable Kubernetes deployment, configure kubeconfig credential in Jenkins'
+                } else {
+                    echo '📊 Model is now deployed and serving predictions'
+                    echo '🤖 Kubeflow automation is running'
+                    echo '🌐 Access points:'
+                    echo '   - Kubeflow UI: http://localhost:8080'
+                    echo '   - ML Pipeline UI: http://localhost:8081'
+                    echo '   - Model Service: http://localhost:8082'
+                    echo '   - Jenkins: http://localhost:8083'
+                }
             }
         }
         failure {

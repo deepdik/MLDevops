@@ -45,7 +45,7 @@ pipeline {
                     fi
                     
                     ${PYTHON_CMD} -m venv venv
-                    source venv/bin/activate
+                    . venv/bin/activate
                     pip install --upgrade pip
                     pip install xgboost scikit-learn pandas numpy matplotlib kfp
                 '''
@@ -56,7 +56,7 @@ pipeline {
             steps {
                 echo '🎯 Training XGBoost model...'
                 sh '''
-                    source venv/bin/activate
+                    . venv/bin/activate
                     ${PYTHON_CMD} notebooks/xgboost_training_simple.py
                     echo "✅ Model training completed"
                 '''
@@ -67,7 +67,7 @@ pipeline {
             steps {
                 echo '🧪 Testing model predictions...'
                 sh '''
-                    source venv/bin/activate
+                    . venv/bin/activate
                     ${PYTHON_CMD} scripts/test_inference.py
                     echo "✅ Model testing completed"
                 '''

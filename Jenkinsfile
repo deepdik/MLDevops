@@ -2,7 +2,6 @@ pipeline {
     agent any
     
     environment {
-        KUBECONFIG = credentials('kubeconfig')
         AWS_REGION = 'us-east-2'
         MODEL_NAME = 'xgboost-model'
         NAMESPACE = 'kubeflow'
@@ -50,7 +49,37 @@ pipeline {
             }
         }
         
+        stage('Setup Kubernetes Access') {
+            steps {
+                echo '🔑 Setting up Kubernetes access...'
+                script {
+                    try {
+                        // Try to use kubeconfig credential if available
+                        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+                            env.KUBECONFIG = KUBECONFIG_FILE
+                            echo "✅ Using kubeconfig credential"
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Kubeconfig credential not found, using local kubeconfig"
+                        // Use local kubeconfig file if credential is not available
+                        sh '''
+                            if [ -f "kubeconfig" ]; then
+                                export KUBECONFIG=$(pwd)/kubeconfig
+                                echo "✅ Using local kubeconfig file"
+                            else
+                                echo "⚠️ No kubeconfig available, skipping Kubernetes operations"
+                                env.SKIP_K8S=true
+                            fi
+                        '''
+                    }
+                }
+            }
+        }
+        
         stage('Deploy to Kubernetes') {
+            when {
+                expression { env.SKIP_K8S != 'true' }
+            }
             steps {
                 echo '🚀 Deploying model to Kubernetes...'
                 sh '''
@@ -62,6 +91,9 @@ pipeline {
         }
         
         stage('Run Kubeflow Automation') {
+            when {
+                expression { env.SKIP_K8S != 'true' }
+            }
             steps {
                 echo '🤖 Running Kubeflow automation job...'
                 sh '''
@@ -72,6 +104,9 @@ pipeline {
         }
         
         stage('Health Check') {
+            when {
+                expression { env.SKIP_K8S != 'true' }
+            }
             steps {
                 echo '🏥 Performing health checks...'
                 script {
@@ -131,13 +166,18 @@ pipeline {
     post {
         success {
             echo '🎉 Pipeline completed successfully!'
-            echo '📊 Model is now deployed and serving predictions'
-            echo '🤖 Kubeflow automation is running'
-            echo '🌐 Access points:'
-            echo '   - Kubeflow UI: http://localhost:8080'
-            echo '   - ML Pipeline UI: http://localhost:8081'
-            echo '   - Model Service: http://localhost:8082'
-            echo '   - Jenkins: http://localhost:8083'
+            if (env.SKIP_K8S == 'true') {
+                echo '📊 Model training completed (Kubernetes deployment skipped)'
+                echo '🔧 To enable Kubernetes deployment, configure kubeconfig credential in Jenkins'
+            } else {
+                echo '📊 Model is now deployed and serving predictions'
+                echo '🤖 Kubeflow automation is running'
+                echo '🌐 Access points:'
+                echo '   - Kubeflow UI: http://localhost:8080'
+                echo '   - ML Pipeline UI: http://localhost:8081'
+                echo '   - Model Service: http://localhost:8082'
+                echo '   - Jenkins: http://localhost:8083'
+            }
         }
         failure {
             echo '❌ Pipeline failed!'
@@ -146,6 +186,7 @@ pipeline {
             echo '   - Check if kubectl is configured properly'
             echo '   - Verify Kubernetes cluster is accessible'
             echo '   - Ensure all required files exist in the repository'
+            echo '   - Configure kubeconfig credential in Jenkins for Kubernetes operations'
         }
     }
 } 

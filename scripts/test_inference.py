@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test Inference Script for XGBoost Model
-This script tests the deployed XGBoost model via REST API
+This script tests the XGBoost model either locally or via REST API
 """
 
 import os
@@ -11,6 +11,8 @@ import argparse
 import requests
 import numpy as np
 import pandas as pd
+import pickle
+import xgboost as xgb
 from typing import List, Dict, Any
 import time
 
@@ -24,6 +26,48 @@ def generate_test_data(n_samples: int = 10) -> List[List[float]]:
     
     return X.tolist()
 
+def test_local_model():
+    """Test the locally trained model"""
+    print("🧪 Testing locally trained XGBoost model...")
+    
+    # Load the trained model
+    model_path = "../models/xgboost_model.pkl"
+    if not os.path.exists(model_path):
+        print(f"❌ Model file not found: {model_path}")
+        return False
+    
+    try:
+        with open(model_path, 'rb') as f:
+            model = pickle.load(f)
+        print("✅ Model loaded successfully")
+    except Exception as e:
+        print(f"❌ Error loading model: {e}")
+        return False
+    
+    # Generate test data
+    print("📊 Generating test data...")
+    test_data = generate_test_data(10)
+    X_test = np.array(test_data)
+    
+    # Make predictions
+    print("🚀 Making predictions...")
+    start_time = time.time()
+    predictions = model.predict(X_test)
+    end_time = time.time()
+    
+    print("✅ Local model test successful!")
+    print(f"⏱️  Prediction time: {end_time - start_time:.4f} seconds")
+    print(f"📈 Predictions: {predictions.tolist()}")
+    
+    # Basic statistics
+    print(f"📊 Prediction statistics:")
+    print(f"   Mean: {np.mean(predictions):.4f}")
+    print(f"   Std: {np.std(predictions):.4f}")
+    print(f"   Min: {np.min(predictions):.4f}")
+    print(f"   Max: {np.max(predictions):.4f}")
+    
+    return True
+
 def send_prediction_request(model_url: str, data: List[List[float]]) -> Dict[str, Any]:
     """Send prediction request to the deployed model"""
     
@@ -33,7 +77,6 @@ def send_prediction_request(model_url: str, data: List[List[float]]) -> Dict[str
             "ndarray": data
         }
     }
-    
     # Send request
     try:
         response = requests.post(
@@ -66,43 +109,36 @@ def test_model_metadata(model_url: str) -> Dict[str, Any]:
         print(f"Error getting model metadata: {e}")
         return {}
 
-def main():
-    """Main function"""
-    parser = argparse.ArgumentParser(description='Test XGBoost model inference')
-    parser.add_argument('--model-url', type=str, required=True, help='Model service URL')
-    parser.add_argument('--n-samples', type=int, default=10, help='Number of test samples')
-    parser.add_argument('--wait-time', type=int, default=30, help='Wait time for service to be ready (seconds)')
-    
-    args = parser.parse_args()
-    
-    print(f"🧪 Testing XGBoost model inference at: {args.model_url}")
+def test_deployed_model(model_url: str, n_samples: int = 10, wait_time: int = 30):
+    """Test deployed model via REST API"""
+    print(f"🧪 Testing deployed XGBoost model at: {model_url}")
     
     # Wait for service to be ready
-    print(f"⏳ Waiting {args.wait_time} seconds for service to be ready...")
-    time.sleep(args.wait_time)
+    print(f"⏳ Waiting {wait_time} seconds for service to be ready...")
+    time.sleep(wait_time)
     
     # Test health endpoint
     print("🔍 Testing model health...")
-    if test_model_health(args.model_url):
+    if test_model_health(model_url):
         print("✅ Model is healthy")
     else:
         print("❌ Model is not healthy")
-        sys.exit(1)
+        return False
     
     # Get model metadata
     print("📋 Getting model metadata...")
-    metadata = test_model_metadata(args.model_url)
+    metadata = test_model_metadata(model_url)
     if metadata:
         print(f"✅ Model metadata: {json.dumps(metadata, indent=2)}")
     
     # Generate test data
-    print(f"📊 Generating {args.n_samples} test samples...")
-    test_data = generate_test_data(args.n_samples)
+    print(f"📊 Generating {n_samples} test samples...")
+    test_data = generate_test_data(n_samples)
     
     # Send prediction request
     print("🚀 Sending prediction request...")
     start_time = time.time()
-    result = send_prediction_request(args.model_url, test_data)
+    result = send_prediction_request(model_url, test_data)
     end_time = time.time()
     
     if result:
@@ -122,10 +158,38 @@ def main():
             print(f"   Min: {np.min(pred_array):.4f}")
             print(f"   Max: {np.max(pred_array):.4f}")
         
-        print("🎉 Model inference test completed successfully!")
+        print("🎉 Deployed model inference test completed successfully!")
+        return True
     else:
         print("❌ Prediction failed!")
-        sys.exit(1)
+        return False
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser(description='Test XGBoost model inference')
+    parser.add_argument('--model-url', type=str, help='Model service URL (optional for local testing)')
+    parser.add_argument('--n-samples', type=int, default=10, help='Number of test samples')
+    parser.add_argument('--wait-time', type=int, default=30, help='Wait time for service to be ready (seconds)')
+    parser.add_argument('--local', action='store_true', help='Test local model only')
+    
+    args = parser.parse_args()
+    
+    # If no model URL provided or local flag is set, test locally
+    if args.local or not args.model_url:
+        success = test_local_model()
+        if success:
+            print("🎉 Local model test completed successfully!")
+            sys.exit(0)
+        else:
+            print("❌ Local model test failed!")
+            sys.exit(1)
+    else:
+        # Test deployed model
+        success = test_deployed_model(args.model_url, args.n_samples, args.wait_time)
+        if success:
+            sys.exit(0)
+        else:
+            sys.exit(1)
 
 if __name__ == "__main__":
     main() 

@@ -50,7 +50,7 @@ pipeline {
                 echo '🧪 Testing model predictions...'
                 sh '''
                     . venv/bin/activate
-                    python3 scripts/test_inference.py
+                    python3 scripts/test_inference.py --local
                     echo "✅ Model testing completed"
                 '''
             }

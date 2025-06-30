@@ -29,7 +29,7 @@ pipeline {
                     python3 -m venv venv
                     . venv/bin/activate
                     pip install --upgrade pip
-                    pip install xgboost scikit-learn pandas numpy matplotlib kfp
+                    pip install xgboost scikit-learn pandas numpy matplotlib kfp boto3
                 '''
             }
         }

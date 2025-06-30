@@ -105,27 +105,30 @@ pipeline {
                 }
             }
         }
-    }
-    
-    post {
-        always {
-            echo '🧹 Cleaning up...'
-            script {
-                try {
-                    sh '''
-                        # Kill any port-forward processes
-                        pkill -f "kubectl port-forward" || true
-                        
-                        # Clean up temporary files
-                        rm -rf venv || true
-                        
-                        echo "✅ Cleanup completed"
-                    '''
-                } catch (Exception e) {
-                    echo "⚠️ Cleanup failed: ${e.getMessage()}"
+        
+        stage('Cleanup') {
+            steps {
+                echo '🧹 Cleaning up...'
+                script {
+                    try {
+                        sh '''
+                            # Kill any port-forward processes
+                            pkill -f "kubectl port-forward" || true
+                            
+                            # Clean up temporary files
+                            rm -rf venv || true
+                            
+                            echo "✅ Cleanup completed"
+                        '''
+                    } catch (Exception e) {
+                        echo "⚠️ Cleanup failed: ${e.getMessage()}"
+                    }
                 }
             }
         }
+    }
+    
+    post {
         success {
             echo '🎉 Pipeline completed successfully!'
             echo '📊 Model is now deployed and serving predictions'

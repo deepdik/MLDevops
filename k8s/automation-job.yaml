@@ -1,0 +1,258 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: xgboost-automation-job
+  namespace: kubeflow
+  labels:
+    app: xgboost-automation
+    type: ml-training
+spec:
+  template:
+    metadata:
+      labels:
+        app: xgboost-automation
+        type: ml-training
+    spec:
+      containers:
+      - name: xgboost-automation
+        image: python:3.9-slim
+        command: ["bash", "-c"]
+        args:
+        - |
+          echo "🤖 Starting XGBoost Automation Job..."
+          echo "📅 Job started at: $(date)"
+          
+          # Install required packages
+          pip install xgboost scikit-learn pandas numpy matplotlib
+          
+          echo "📦 Packages installed successfully"
+          
+          # Generate synthetic data
+          python -c "
+          import numpy as np
+          import pandas as pd
+          import os
+          
+          print('🚀 Generating synthetic data...')
+          
+          # Generate data
+          np.random.seed(42)
+          n_samples = 1000
+          n_features = 5
+          
+          X = np.random.randn(n_samples, n_features)
+          coefficients = np.random.randn(n_features) * 0.5
+          y = np.dot(X, coefficients) + np.random.normal(0, 0.1, n_samples)
+          
+          # Create DataFrame
+          feature_names = [f'feature_{i}' for i in range(n_features)]
+          df = pd.DataFrame(X, columns=feature_names)
+          df['target'] = y
+          
+          # Save data
+          os.makedirs('/tmp/data', exist_ok=True)
+          df.to_csv('/tmp/data/dataset.csv', index=False)
+          
+          print(f'✅ Generated {df.shape[0]} samples with {df.shape[1]-1} features')
+          print('📊 Data saved to /tmp/data/dataset.csv')
+          "
+          
+          # Train XGBoost model
+          python -c "
+          import numpy as np
+          import pandas as pd
+          import xgboost as xgb
+          from sklearn.model_selection import train_test_split
+          from sklearn.metrics import r2_score, mean_squared_error
+          import os
+          
+          print('🎯 Training XGBoost model...')
+          
+          # Load data
+          df = pd.read_csv('/tmp/data/dataset.csv')
+          X = df.drop('target', axis=1)
+          y = df['target']
+          
+          # Split data
+          X_train, X_test, y_train, y_test = train_test_split(
+              X, y, test_size=0.2, random_state=42
+          )
+          
+          # Train model
+          model = xgb.XGBRegressor(n_estimators=100, max_depth=6, random_state=42)
+          model.fit(X_train, y_train)
+          
+          # Evaluate
+          y_pred = model.predict(X_test)
+          r2 = r2_score(y_test, y_pred)
+          rmse = mean_squared_error(y_test, y_pred, squared=False)
+          
+          print(f'✅ Model trained successfully!')
+          print(f'📊 R² Score: {r2:.4f}')
+          print(f'📊 RMSE: {rmse:.4f}')
+          
+          # Save model
+          os.makedirs('/tmp/model', exist_ok=True)
+          model.save_model('/tmp/model/xgboost_model.json')
+          
+          print('💾 Model saved to /tmp/model/xgboost_model.json')
+          
+          # Save metrics
+          metrics = {
+              'r2_score': r2,
+              'rmse': rmse,
+              'training_samples': len(X_train),
+              'test_samples': len(X_test),
+              'features': list(X.columns)
+          }
+          
+          import json
+          with open('/tmp/model/metrics.json', 'w') as f:
+              json.dump(metrics, f, indent=2)
+          
+          print('📊 Metrics saved to /tmp/model/metrics.json')
+          "
+          
+          # Create evaluation plots
+          python -c "
+          import xgboost as xgb
+          import numpy as np
+          import matplotlib.pyplot as plt
+          import pandas as pd
+          import os
+          
+          print('📈 Creating evaluation plots...')
+          
+          # Load model and data
+          model = xgb.XGBRegressor()
+          model.load_model('/tmp/model/xgboost_model.json')
+          
+          df = pd.read_csv('/tmp/data/dataset.csv')
+          X = df.drop('target', axis=1)
+          y = df['target']
+          
+          # Make predictions
+          y_pred = model.predict(X)
+          
+          # Create evaluation plots
+          os.makedirs('/tmp/evaluation', exist_ok=True)
+          
+          # Actual vs Predicted plot
+          plt.figure(figsize=(10, 8))
+          
+          plt.subplot(2, 2, 1)
+          plt.scatter(y, y_pred, alpha=0.6)
+          plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', lw=2)
+          plt.xlabel('Actual Values')
+          plt.ylabel('Predicted Values')
+          plt.title('Actual vs Predicted Values')
+          
+          # Feature importance plot
+          plt.subplot(2, 2, 2)
+          feature_importance = pd.DataFrame({
+              'feature': X.columns,
+              'importance': model.feature_importances_
+          }).sort_values('importance', ascending=False)
+          
+          feature_importance.plot(x='feature', y='importance', kind='barh', ax=plt.gca())
+          plt.title('XGBoost Feature Importance')
+          plt.xlabel('Importance')
+          
+          # Residuals plot
+          plt.subplot(2, 2, 3)
+          residuals = y - y_pred
+          plt.scatter(y_pred, residuals, alpha=0.6)
+          plt.axhline(y=0, color='r', linestyle='--')
+          plt.xlabel('Predicted Values')
+          plt.ylabel('Residuals')
+          plt.title('Residuals Plot')
+          
+          # Distribution of predictions
+          plt.subplot(2, 2, 4)
+          plt.hist(y_pred, bins=30, alpha=0.7, label='Predictions')
+          plt.hist(y, bins=30, alpha=0.7, label='Actual')
+          plt.xlabel('Values')
+          plt.ylabel('Frequency')
+          plt.title('Distribution Comparison')
+          plt.legend()
+          
+          plt.tight_layout()
+          plt.savefig('/tmp/evaluation/model_evaluation.png', dpi=300, bbox_inches='tight')
+          plt.close()
+          
+          print('✅ Evaluation plots saved to /tmp/evaluation/model_evaluation.png')
+          "
+          
+          # Create deployment manifest
+          python -c "
+          import os
+          
+          print('🚀 Creating deployment manifest...')
+          
+          deployment_yaml = '''
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: xgboost-automated-model
+            namespace: kubeflow
+            labels:
+              app: xgboost-automated-model
+              automation: true
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: xgboost-automated-model
+            template:
+              metadata:
+                labels:
+                  app: xgboost-automated-model
+                  automation: true
+              spec:
+                containers:
+                - name: xgboost-model
+                  image: python:3.9-slim
+                  ports:
+                  - containerPort: 8080
+                  command: ['python', '-m', 'http.server', '8080']
+                  volumeMounts:
+                  - name: model-volume
+                    mountPath: /app/models
+                volumes:
+                - name: model-volume
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: xgboost-automated-service
+            namespace: kubeflow
+            labels:
+              automation: true
+          spec:
+            selector:
+              app: xgboost-automated-model
+            ports:
+            - port: 80
+              targetPort: 8080
+            type: ClusterIP
+          '''
+          
+          os.makedirs('/tmp/deployment', exist_ok=True)
+          with open('/tmp/deployment/deployment.yaml', 'w') as f:
+              f.write(deployment_yaml)
+          
+          print('✅ Deployment manifest created at /tmp/deployment/deployment.yaml')
+          "
+          
+          echo "🎉 XGBoost Automation Job completed successfully!"
+          echo "📅 Job completed at: $(date)"
+          echo "📊 Check the logs above for detailed results"
+          echo "🤖 This automation demonstrates:"
+          echo "   - Data generation"
+          echo "   - Model training"
+          echo "   - Model evaluation"
+          echo "   - Deployment preparation"
+          echo "   - All visible in Kubeflow UI!"
+      restartPolicy: Never
+  backoffLimit: 3 

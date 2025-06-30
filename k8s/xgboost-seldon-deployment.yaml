@@ -1,0 +1,96 @@
+apiVersion: machinelearning.seldon.io/v1
+kind: SeldonDeployment
+metadata:
+  name: xgboost-model
+  namespace: kubeflow
+  labels:
+    app: xgboost-model
+    version: v1
+spec:
+  name: xgboost-predictor
+  protocol: seldon
+  transport: rest
+  replicas: 1
+  predictors:
+  - name: default
+    replicas: 1
+    graph:
+      name: xgboost-model
+      type: MODEL
+      modelUri: s3://xgboost-ops-models-wngp5jvy/models/xgboost_model_latest.pkl
+      envSecretRefName: seldon-init-container-secret
+      parameters:
+      - name: model_type
+        type: STRING
+        value: "sklearn"
+      - name: model_format
+        type: STRING
+        value: "pickle"
+    componentSpecs:
+    - spec:
+        containers:
+        - name: xgboost-model
+          image: seldonio/sklearnserver:1.20.0
+          ports:
+          - containerPort: 9000
+            name: http
+          - containerPort: 5001
+            name: grpc
+          env:
+          - name: SELDON_LOG_LEVEL
+            value: "INFO"
+          - name: MODEL_NAME
+            value: "xgboost-model"
+          - name: API_TYPE
+            value: "REST"
+          - name: SERVICE_TYPE
+            value: "MODEL"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9000
+            initialDelaySeconds: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: seldon-init-container-secret
+  namespace: kubeflow
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: "your-access-key"
+  AWS_SECRET_ACCESS_KEY: "your-secret-key"
+  AWS_DEFAULT_REGION: "us-east-2"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: xgboost-model-service
+  namespace: kubeflow
+  labels:
+    app: xgboost-model
+spec:
+  selector:
+    app: xgboost-model
+  ports:
+  - name: http
+    port: 80
+    targetPort: 9000
+  - name: grpc
+    port: 5001
+    targetPort: 5001
+  type: ClusterIP 

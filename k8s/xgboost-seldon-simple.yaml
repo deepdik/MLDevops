@@ -1,0 +1,71 @@
+apiVersion: machinelearning.seldon.io/v1
+kind: SeldonDeployment
+metadata:
+  name: xgboost-seldon
+  namespace: kubeflow
+  labels:
+    app: xgboost-seldon
+spec:
+  name: xgboost-predictor
+  protocol: seldon
+  transport: rest
+  replicas: 1
+  predictors:
+  - name: default
+    replicas: 1
+    graph:
+      name: xgboost-model
+      type: MODEL
+      modelUri: file:///app/models/xgboost_model.pkl
+      parameters:
+      - name: model_type
+        type: STRING
+        value: "sklearn"
+      - name: model_format
+        type: STRING
+        value: "pickle"
+    componentSpecs:
+    - spec:
+        containers:
+        - name: xgboost-model
+          image: seldonio/sklearnserver:1.20.0
+          ports:
+          - containerPort: 9000
+            name: http
+          - containerPort: 5001
+            name: grpc
+          env:
+          - name: SELDON_LOG_LEVEL
+            value: "INFO"
+          - name: MODEL_NAME
+            value: "xgboost-model"
+          - name: API_TYPE
+            value: "REST"
+          - name: SERVICE_TYPE
+            value: "MODEL"
+          volumeMounts:
+          - name: model-volume
+            mountPath: /app/models
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9000
+            initialDelaySeconds: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 5
+        volumes:
+        - name: model-volume
+          configMap:
+            name: xgboost-model 

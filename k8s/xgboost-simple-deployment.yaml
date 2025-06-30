@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xgboost-model
+  namespace: kubeflow
+  labels:
+    app: xgboost-model
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xgboost-model
+  template:
+    metadata:
+      labels:
+        app: xgboost-model
+    spec:
+      containers:
+      - name: xgboost-model
+        image: python:3.9-slim
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: MODEL_PATH
+          value: "/app/models/xgboost_model.pkl"
+        - name: PREPROCESSING_PATH
+          value: "/app/models/preprocessing_info.pkl"
+        volumeMounts:
+        - name: model-volume
+          mountPath: /app/models
+        command: ["python", "-m", "http.server", "8080"]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: model-volume
+        configMap:
+          name: xgboost-model
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: xgboost-model-service
+  namespace: kubeflow
+  labels:
+    app: xgboost-model
+spec:
+  selector:
+    app: xgboost-model
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  type: ClusterIP 

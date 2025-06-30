@@ -18,8 +18,33 @@ pipeline {
         stage('Setup Environment') {
             steps {
                 echo '🔧 Setting up Python environment...'
+                script {
+                    // Detect Python command and set as environment variable
+                    def pythonCmd = sh(
+                        script: '''
+                            if command -v python3 &> /dev/null; then
+                                echo "python3"
+                            elif command -v python &> /dev/null; then
+                                echo "python"
+                            else
+                                echo "python3"
+                            fi
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    
+                    env.PYTHON_CMD = pythonCmd
+                    echo "Using Python: ${env.PYTHON_CMD}"
+                }
+                
                 sh '''
-                    python3 -m venv venv
+                    # Install Python if not available
+                    if ! command -v ${PYTHON_CMD} &> /dev/null; then
+                        echo "❌ Python not found. Installing Python..."
+                        apt-get update && apt-get install -y python3 python3-pip python3-venv
+                    fi
+                    
+                    ${PYTHON_CMD} -m venv venv
                     source venv/bin/activate
                     pip install --upgrade pip
                     pip install xgboost scikit-learn pandas numpy matplotlib kfp
@@ -32,7 +57,7 @@ pipeline {
                 echo '🎯 Training XGBoost model...'
                 sh '''
                     source venv/bin/activate
-                    python notebooks/xgboost_training_simple.py
+                    ${PYTHON_CMD} notebooks/xgboost_training_simple.py
                     echo "✅ Model training completed"
                 '''
             }
@@ -43,7 +68,7 @@ pipeline {
                 echo '🧪 Testing model predictions...'
                 sh '''
                     source venv/bin/activate
-                    python scripts/test_inference.py
+                    ${PYTHON_CMD} scripts/test_inference.py
                     echo "✅ Model testing completed"
                 '''
             }
